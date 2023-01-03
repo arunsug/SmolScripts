@@ -136,7 +136,6 @@ def generateTable(isSplit, sendRange, validRange, validLength):
                 # if the entry is in the table don't readd it
                 if (inputs, result) not in table:
                     table.add((inputs, result))
-                    print((inputs, result))
     return table
 
 print("Generating Truth Tables")
@@ -187,11 +186,16 @@ print("Number of entries:     Table1", len(table1), "    Table2", len(table2))
 
 f = open("Table1.txt" , "w+")
 
-def formatInstructionData(instructionData):
+# helper function for converting instruction data into a string
+# ((bool, bool, bool, int), ...) instructionData: the instruction data
+# int numInstructions: The maximum number of instructions we expect to see in InstructionData
+def formatInstructionData(instructionData, numInstructions):
     instructionDataString = ""
     positionLength = int(math.log(validLength,2))
     positionFormatString = "{:0" + str(positionLength)+"b}"
-    i = 0 
+    i = 0
+    # the format is 3 bits indicating valid, split, length, then the poistion bits which depends on 
+    # the buffer size
     for instruction in instructionData:
         isValid = "1"
         isSplit = "1" if instruction[0] else "0"
@@ -201,10 +205,13 @@ def formatInstructionData(instructionData):
                                     isFourLength + position
         i += 1
     
-    for i in range(i, maxSendRequest):
+    # fill in the rest of the entries as not valid if there are no more instructions
+    for i in range(i, numInstructions):
         instructionDataString += ", " + str(3+positionLength) + "\'b000" + "0"*positionLength
     return instructionDataString
     
+# sample format
+#{4'b0110, 16'b0001????????????, 16'b001????????0?100}: outmask = {4'b0100, 4'b0001, 4'b0000, 1'b0};
 
 print("Writing truth table 1...")
 table1 = list(table1)
@@ -215,7 +222,8 @@ for entry in table1:
             "}: outmask = {"+validNumFormatString.format(entry[1][0]) + \
             ", " + validNumFormatString.format(entry[1][1]) + ", " + \
             sendFormatString.format(entry[1][2]) + ", " + \
-            (trueString if entry[1][3] else falseString) + formatInstructionData(entry[1][4]) +"}\n"
+            (trueString if entry[1][3] else falseString) + \
+            formatInstructionData(entry[1][4], maxSendRequest) + "}\n"
     f.write(row)
 f.close()
 
@@ -229,14 +237,14 @@ for entry in table2:
             ", " + (trueString if entry[0][3] else falseString) + \
             "}: outmask = {"+validNumFormatString.format(entry[1][0]) + \
             ", " + validNumFormatString.format(entry[1][1]) + ", " + \
-            (trueString if entry[1][2] else falseString) + formatInstructionData(entry[1][3]) +"}\n"
+            (trueString if entry[1][2] else falseString) + \
+            formatInstructionData(entry[1][3], maxSendRequest-1) +"}\n"
     f.write(row)
 f.close()
 
 print("Done!")   
 
-#{4'b0110, 16'b0001????????????, 16'b001????????0?100}: outmask = {4'b0100, 4'b0001, 4'b0000, 1'b0};
-#{4'b0110, 16'b0001????????????, 16'b001????????0?100, 1'b0}: outmask = {4'b0100, 4'b0001, 4'b0000, 1'b0};
-#
+
+
     
 
