@@ -22,10 +22,12 @@ import math
 #   bool isSplit/UsedSplit: if hasSplit[0] is true retrun usedSplit indicating 
 #                           if the rest of the instruction was sent. If not 
 #                           returns if there is a split instruction
+#   ((bool, bool, int),) instructionData: (is it split, len 2 or 4, position) 
 def numSent(valid, blockSize, sendRequest, hasSplit):
     sendCount = 0
     isSplit = False
     usedSplit = False
+    instructionData = []
 
     # handle if there is a split instruction
     if hasSplit[1] and valid > 0:
@@ -38,18 +40,21 @@ def numSent(valid, blockSize, sendRequest, hasSplit):
     for i in range(sendRequest):
         if valid > 1 and blockSize and blockSize[-1]:
             # handle 4 byte instruction
+            instructionData.append((False, blockSize[-1], sendCount))
             valid -= 2
             sendCount += 2
             sendRequest -= 1
             blockSize.pop()
         elif valid > 0 and blockSize and not blockSize[-1]:
             # handle 2 byte instruction
+            instructionData.append((False, blockSize[-1], sendCount))
             valid -= 1
             sendCount += 1
             sendRequest -= 1
             blockSize.pop()
         elif valid == 1 and blockSize and blockSize[-1]:
             # handle if an instruction is split
+            instructionData.append((True, blockSize[-1], sendCount))
             isSplit = True
             break
         else:
@@ -57,11 +62,12 @@ def numSent(valid, blockSize, sendRequest, hasSplit):
             break
         
     if hasSplit[0]:
-        # if there was a preceding buffer return if we used a split instruction
-        return sendCount, valid, sendRequest, usedSplit
+        # if this is the second buffer return if we used a split instruction
+        # and don't return sendRequest
+        return sendCount, valid, usedSplit, tuple(instructionData),
     else:
         # if not return if there was a split
-        return sendCount, valid, sendRequest, isSplit
+        return sendCount, valid, sendRequest, isSplit, tuple(instructionData),
 
 # generates a table of buffer input states and the resulting output states
 # [bool, bool] isSplit: first bool is there a preceeding buffer
@@ -130,7 +136,7 @@ def generateTable(isSplit, sendRange, validRange, validLength):
                 # if the entry is in the table don't readd it
                 if (inputs, result) not in table:
                     table.add((inputs, result))
-                    #print((inputs, result))
+                    print((inputs, result))
     return table
 
 print("Generating Truth Tables")
@@ -155,9 +161,11 @@ print("Generating table 1...")
 table1 = generateTable([False, False], range(1, maxSendRequest+1), 
                        range(0, validLength), validLength)
 # Add entries to handle impossible inputs
-table1.add(((0,"?"*validLength, "?"*validLength), (0,0,0,False)))
+table1.add(((0,"?"*validLength, "?"*validLength), (0,0,0,False,())))
 for i in range(1, maxSendRequest+1):
-    table1.add(((i, "0"*validLength, "?"*validLength), (0,0,0,False)))
+    table1.add(((i, "0"*validLength, "?"*validLength), (0,0,0,False,())))
+for i in range(maxSendRequest+1, maxSendRequest*2):
+    table1.add(((i,"?"*validLength, "?"*validLength),(0,0,0,False,())))
 
 # table 2 represents the second buffer
 # there is a preceding buffer tha can have carry over a split instruction
@@ -169,12 +177,34 @@ table2 = generateTable([True, True], range(1, maxSendRequest+1),
 table2.update(generateTable([True, False], range(0, maxSendRequest), 
                             range(0, validLength+1), validLength))
 # Add entries to handle impossible inputs
-table2.add(((maxSendRequest, "?"*validLength, "?"*validLength, False), (0,0,0,False)))
-table2.add(((0, "?"*validLength, "?"*validLength, True), (0,0,0,False)))
+table2.add(((maxSendRequest, "?"*validLength, "?"*validLength, False), (0,0,False,())))
+table2.add(((0, "?"*validLength, "?"*validLength, True), (0,0,False,())))
+for b in [True, False]:
+    for i in range(maxSendRequest+1, maxSendRequest*2):
+        table2.add(((i,"?"*validLength, "?"*validLength, b),(0,0,False,())))
 
 print("Number of entries:     Table1", len(table1), "    Table2", len(table2))
 
 f = open("Table1.txt" , "w+")
+
+def formatInstructionData(instructionData):
+    instructionDataString = ""
+    positionLength = int(math.log(validLength,2))
+    positionFormatString = "{:0" + str(positionLength)+"b}"
+    i = 0 
+    for instruction in instructionData:
+        isValid = "1"
+        isSplit = "1" if instruction[0] else "0"
+        isFourLength = "1" if instruction[1] else "0"
+        position = positionFormatString.format(instruction[2])
+        instructionDataString +=  ", " + str(3+positionLength) + "\'b" + isValid + isSplit + \
+                                    isFourLength + position
+        i += 1
+    
+    for i in range(i, maxSendRequest):
+        instructionDataString += ", " + str(3+positionLength) + "\'b000" + "0"*positionLength
+    return instructionDataString
+    
 
 print("Writing truth table 1...")
 table1 = list(table1)
@@ -185,7 +215,7 @@ for entry in table1:
             "}: outmask = {"+validNumFormatString.format(entry[1][0]) + \
             ", " + validNumFormatString.format(entry[1][1]) + ", " + \
             sendFormatString.format(entry[1][2]) + ", " + \
-            (trueString if entry[1][3] else falseString) + "}\n"
+            (trueString if entry[1][3] else falseString) + formatInstructionData(entry[1][4]) +"}\n"
     f.write(row)
 f.close()
 
@@ -199,8 +229,7 @@ for entry in table2:
             ", " + (trueString if entry[0][3] else falseString) + \
             "}: outmask = {"+validNumFormatString.format(entry[1][0]) + \
             ", " + validNumFormatString.format(entry[1][1]) + ", " + \
-            sendFormatString.format(entry[1][2]) + ", " + \
-            (trueString if entry[1][3] else falseString) + "}\n"
+            (trueString if entry[1][2] else falseString) + formatInstructionData(entry[1][3]) +"}\n"
     f.write(row)
 f.close()
 
