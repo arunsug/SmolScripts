@@ -6,6 +6,7 @@ The tables are to quickly index the final state a buffer given an input state
 details on the inputs and outputs are in the comments.
 
 """
+import math
 
 # processes buffer info and returns the state it will reach after sending the
 # instrcutions that it can
@@ -78,7 +79,7 @@ def generateTable(isSplit, sendRange, validRange, validLength):
             vint = 1
             vint <<= v1
             # format the string for the valid buffer
-            validString = formatString.format(vint)
+            validString = validFormatString.format(vint)
             validString = validString[:validLength-v1] + '?'*v1
             if v1 == validLength:
                 validString = "0"*validLength
@@ -90,7 +91,7 @@ def generateTable(isSplit, sendRange, validRange, validLength):
                 blockSize = []
                 l = 0
                 # format the string of block lengths
-                blockString = formatString.format(b1)
+                blockString = validFormatString.format(b1)
                 # handle if there is a split instruction in the previous buffer
                 if isSplit[1]:
                     l += 1
@@ -125,16 +126,27 @@ def generateTable(isSplit, sendRange, validRange, validLength):
                 if isSplit[0]:
                     inputs = (send, validString, blockString, isSplit[1])
                 else:
-                    inputs = (send, validString, blockString)
+                    inputs = (send,  validString, blockString)
                 # if the entry is in the table don't readd it
                 if (inputs, result) not in table:
                     table.add((inputs, result))
+                    #print((inputs, result))
     return table
 
 print("Generating Truth Tables")
 maxSendRequest = 8
 validLength = maxSendRequest*2
-formatString = "{:0"+ str(validLength) +"b}"
+validFormatString = "{:0"+ str(validLength) +"b}"
+validPreString = str(validLength) + "\'b"
+
+sendStringLength = int(math.log(maxSendRequest, 2) + 1)
+sendFormatString = str(sendStringLength)+"\'b{:0" + str(sendStringLength)+"b}"
+
+validNumLength = int(math.log(validLength, 2)) + 1
+validNumFormatString = str(validNumLength)+"\'b{:0" + str(validNumLength)+"b}"
+
+falseString = "1\'b0"
+trueString = "1\'b1"
 
 # table 1 represents the first buffer
 # no preceding buffer and at least 1 instruction will be requested and at least
@@ -143,9 +155,9 @@ print("Generating table 1...")
 table1 = generateTable([False, False], range(1, maxSendRequest+1), 
                        range(0, validLength), validLength)
 # Add entries to handle impossible inputs
-table1.add(((0, "?"*validLength, "?"*validLength), (0, 0, 0, False)))
+table1.add(((0,"?"*validLength, "?"*validLength), (0,0,0,False)))
 for i in range(1, maxSendRequest+1):
-    table1.add(((i, "0"*validLength, "?"*validLength), (0, 0, 0, False)))
+    table1.add(((i, "0"*validLength, "?"*validLength), (0,0,0,False)))
 
 # table 2 represents the second buffer
 # there is a preceding buffer tha can have carry over a split instruction
@@ -157,8 +169,8 @@ table2 = generateTable([True, True], range(1, maxSendRequest+1),
 table2.update(generateTable([True, False], range(0, maxSendRequest), 
                             range(0, validLength+1), validLength))
 # Add entries to handle impossible inputs
-table2.add((((4, "?"*validLength, "?"*validLength, False)),(0, 0, 0, False)))
-table2.add((((0, "?"*validLength, "?"*validLength, True)),(0, 0, 0, False)))
+table2.add(((maxSendRequest, "?"*validLength, "?"*validLength, False), (0,0,0,False)))
+table2.add(((0, "?"*validLength, "?"*validLength, True), (0,0,0,False)))
 
 print("Number of entries:     Table1", len(table1), "    Table2", len(table2))
 
@@ -168,7 +180,13 @@ print("Writing truth table 1...")
 table1 = list(table1)
 table1.sort()
 for entry in table1:
-    f.write(str(entry) + "\n")
+    row = "{"+sendFormatString.format(entry[0][0])+", "+ \
+            validPreString+entry[0][1]+", " + validPreString + entry[0][2] + \
+            "}: outmask = {"+validNumFormatString.format(entry[1][0]) + \
+            ", " + validNumFormatString.format(entry[1][1]) + ", " + \
+            sendFormatString.format(entry[1][2]) + ", " + \
+            (trueString if entry[1][3] else falseString) + "}\n"
+    f.write(row)
 f.close()
 
 f = open("Table2.txt" , "w+")
@@ -176,8 +194,20 @@ print("Writing truth table 2...")
 table2 = list(table2)
 table2.sort()
 for entry in table2:
-    f.write(str(entry) + "\n")
+    row = "{"+sendFormatString.format(entry[0][0])+", "+ \
+            validPreString+entry[0][1]+", " + validPreString + entry[0][2] + \
+            ", " + (trueString if entry[0][3] else falseString) + \
+            "}: outmask = {"+validNumFormatString.format(entry[1][0]) + \
+            ", " + validNumFormatString.format(entry[1][1]) + ", " + \
+            sendFormatString.format(entry[1][2]) + ", " + \
+            (trueString if entry[1][3] else falseString) + "}\n"
+    f.write(row)
 f.close()
+
 print("Done!")   
+
+#{4'b0110, 16'b0001????????????, 16'b001????????0?100}: outmask = {4'b0100, 4'b0001, 4'b0000, 1'b0};
+#{4'b0110, 16'b0001????????????, 16'b001????????0?100, 1'b0}: outmask = {4'b0100, 4'b0001, 4'b0000, 1'b0};
+#
     
 
