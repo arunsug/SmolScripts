@@ -6,7 +6,7 @@ table = open("Yosemite.csv", "r")
 folder = "IncludeFiles/"
 inputNameIndex = 0
 lengthIndex = 1
-outputNameIndex = 10
+outputNameIndex = 9
 blocks = [4,5,6]
 print(table.readline())
 
