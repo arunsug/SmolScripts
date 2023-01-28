@@ -9,7 +9,7 @@ passed through. One for defining the input and output and one for connection the
 
 """
 
-table = open("Yosemite.csv", "r")
+table = open("Yosemite2.csv", "r")
 
 # dict to store all the files we are writing to
 files = {}
@@ -32,13 +32,15 @@ for line in table:
     #if there is no input value skip the row
     if inputWire == []:
         continue
-    # if the length is 2 that means there we are indexing the input e.g. rv64_dbg_rst_l [0] is
-    # turned into rv64_dbg_rst_l_0
+    # if the length is 2 that means there we need to have the bus width included
+    wireString = ""
     if len(inputWire) == 2:
-        name = inputWire[0] + "_" + str(eval(inputWire[1])[0])
-    else:
-        name = inputWire[0]
+        wireString = " " + inputWire[1]
+
+    name = inputWire[0]
     inputName = name
+
+    output = row[outputNameIndex].strip().split()[0]
 
     # get the width value set correctly
     lengthString = row[lengthIndex].strip()
@@ -60,14 +62,14 @@ for line in table:
         if fileName not in files:
             files[fileName] = open(folder + fileName, "w+")
         # write the input and output lines
-        inputLine = "input logic " + lengthString + inputName + ",\n"
+        inputLine = "input logic " + lengthString + inputName + wireString + ",\n"
         files[fileName].write(inputLine)
         # if we are on the last module use the correct input name
         if i == len(modules)-1:
-            outputName = row[outputNameIndex].strip()
+            outputName = output
         else:
             outputName = name + "_"  + module
-        outputLine = "output logic " + lengthString + outputName + ",\n"
+        outputLine = "output logic " + lengthString + outputName + wireString + ",\n"
         files[fileName].write(outputLine)
 
         # create the new connect file and add it to the files dict if isn't there
